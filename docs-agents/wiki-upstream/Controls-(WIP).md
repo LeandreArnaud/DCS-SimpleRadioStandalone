@@ -1,0 +1,1 @@
+![Controls screen](https://github.com/ciribob/DCS-SimpleRadioStandalone/raw/master/docs/SRS_Controls_screen.png) 

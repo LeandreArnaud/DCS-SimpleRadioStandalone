@@ -1,0 +1,1 @@
+![Favorites screen of SRS](https://github.com/ciribob/DCS-SimpleRadioStandalone/raw/master/docs/SRS_Favorites_screen.png)
