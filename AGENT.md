@@ -42,6 +42,7 @@ Upstream : https://github.com/ciribob/DCS-SimpleRadioStandalone (wiki cloné dan
 | `SharedAudio/` | DLL natives opus/lame (pas de code) |
 | `DCS-SR-CommonTests/` | MSTest (7 tests) |
 | `publish.ps1`, `.github/workflows/` | Build, signature, release |
+| `client-rust/` | **Client Rust** (sans .NET), workspace cargo, remplaçant de `SR-ClientRadio.exe` |
 | `docs-agents/` | Cette documentation |
 
 Ports : serveur **5002 TCP+UDP** ; DCS↔client localhost UDP 9084 (radios), 9085/9086 (LOS),
@@ -63,6 +64,7 @@ Lire `docs-agents/README.md` pour le détail. Par besoin :
 | Serveur (TCP, routage, GUI, CLI, Linux) | `blocs/serveur.md` |
 | Lua / DCS (export, GameGUI, modules avions, `lua-srs.dll`) | `blocs/lua-dcs-integration.md` |
 | ExternalAudio, Installer, AutoUpdater, Mobile | `blocs/external-audio.md`, `blocs/installer-autoupdater.md` |
+| **Client Rust** (`client-rust/`) : règles, layout, décisions, jalons | `blocs/client-rust.md` |
 | Vocabulaire et règles métier | `metier/glossaire.md`, `metier/fonctionnalites-radio.md` |
 | Options utilisateur (serveur, client), presets, avions | `metier/parametres-*.md`, `metier/presets-et-profils.md`, `metier/aeronefs-supportes.md` |
 | Style de code | `guidelines/conventions-code.md` |

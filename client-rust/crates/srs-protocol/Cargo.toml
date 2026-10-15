@@ -1,0 +1,18 @@
+[package]
+name = "srs-protocol"
+description = "SRS wire protocol (TCP JSON + UDP voice), pure, no I/O. Byte-compatible with the C# implementation."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+rand = { workspace = true }
+log = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }

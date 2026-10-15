@@ -17,6 +17,7 @@ Documentation destinée aux agents IA (et aux humains pressés). Le point d'entr
 - `lua-dcs-integration.md` : scripts Lua, déploiement, ports, payload export, helpers `SR`, LOS, GameGUI, overlay in-game, `lua-srs.dll`, plugins, conventions, pièges.
 - `external-audio.md` : outil TTS/MP3, options, pipeline, extension.
 - `installer-autoupdater.md` : Installer (registre, scripts, args), AutoUpdater (GitHub), SharedAudio, Mobile (abandonné).
+- `client-rust.md` : client Rust (`client-rust/`) : règles de compatibilité, layout des crates, décisions techniques, bizarreries C# reproduites, état des jalons.
 
 ## metier/ — ce que le logiciel doit faire (issu du wiki + code)
 - `glossaire.md` : vocabulaire SRS/DCS.

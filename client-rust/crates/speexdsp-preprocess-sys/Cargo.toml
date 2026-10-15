@@ -1,0 +1,11 @@
+[package]
+name = "speexdsp-preprocess-sys"
+description = "Statically linked speexdsp preprocessor (denoise/AGC), vendored C sources."
+version = "1.2.1"
+edition = "2021"
+license = "BSD-3-Clause"
+links = "speexdsp_preprocess"
+publish = false
+
+[build-dependencies]
+cc = "1"

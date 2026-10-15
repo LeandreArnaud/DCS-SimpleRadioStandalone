@@ -1,0 +1,15 @@
+[package]
+name = "srs-settings"
+description = "global.cfg / <profile>.cfg handling, byte-compatible with SharpConfig 4.1 as used by the C# client."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+thiserror = { workspace = true }
+log = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"

@@ -1,0 +1,11 @@
+[package]
+name = "srs-opus-sys"
+description = "Statically linked libopus 1.5.2 (float build, no SIMD/RTCD), vendored sources compiled with cc. No cmake."
+version = "1.5.2"
+edition = "2021"
+license = "BSD-3-Clause"
+links = "opus"
+publish = false
+
+[build-dependencies]
+cc = "1"

@@ -1,0 +1,31 @@
+[package]
+name = "srs-app"
+description = "DCS SimpleRadio Standalone client (Rust). Drop-in replacement for SR-ClientRadio.exe."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+build = "build.rs"
+
+[[bin]]
+name = "SR-ClientRadio"
+path = "src/main.rs"
+
+[dependencies]
+srs-protocol = { path = "../srs-protocol" }
+srs-settings = { path = "../srs-settings" }
+srs-net = { path = "../srs-net" }
+srs-audio = { path = "../srs-audio" }
+srs-dcs = { path = "../srs-dcs" }
+srs-client = { path = "../srs-client" }
+srs-input = { path = "../srs-input" }
+raw-window-handle = "0.6"
+eframe = { version = "0.36", default-features = false, features = ["default_fonts", "glow", "wayland", "x11"] }
+egui = "0.36"
+log = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }
+
+[build-dependencies]

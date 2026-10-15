@@ -1,0 +1,27 @@
+# docker compose -f client-rust/tools/docker/server/compose.yml up --build
+# (run from the repository root)
+services:
+  srs-server:
+    build:
+      context: ../../../..
+      dockerfile: client-rust/tools/docker/server/Dockerfile
+    platform: linux/amd64
+    image: srs-server:local
+    ports:
+      - "5002:5002/tcp"
+      - "5002:5002/udp"
+    volumes:
+      - ./data:/srs/data
+    working_dir: /srs/data
+    command:
+      - --consoleLogs=true
+      - --port=5002
+      - --enableEAM=true
+      - --eamBluePassword=blue
+      - --eamRedPassword=red
+      - --testFrequencies=247.2,120.3
+      - --clientExportEnabled=true
+      - --clientExportPath=/srs/data/clients-list.json
+      # The HTTP API (HttpListener) does not start on Linux with a plain IP
+      # prefix; it is not needed for client tests.
+      - --httpServerEnabled=false

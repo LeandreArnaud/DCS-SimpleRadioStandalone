@@ -1,0 +1,25 @@
+[package]
+name = "srs-client"
+description = "Headless SRS client engine: session, voice transport, decode thread, audio engine, EAM feeder. The UI crate sits on top."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+srs-protocol = { path = "../srs-protocol" }
+srs-net = { path = "../srs-net" }
+srs-audio = { path = "../srs-audio" }
+srs-dcs = { path = "../srs-dcs" }
+srs-input = { path = "../srs-input" }
+srs-settings = { path = "../srs-settings" }
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros"] }
+parking_lot = "0.12"
+log = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+env_logger = "0.11"
+parking_lot = "0.12"

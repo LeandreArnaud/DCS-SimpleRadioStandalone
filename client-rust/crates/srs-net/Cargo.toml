@@ -1,0 +1,18 @@
+[package]
+name = "srs-net"
+description = "Client side of the SRS network protocol: TCP control session and UDP voice transport (tokio)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+srs-protocol = { path = "../srs-protocol" }
+tokio = { version = "1", features = ["net", "time", "sync", "rt-multi-thread", "macros", "io-util"] }
+socket2 = { version = "0.6", features = ["all"] }
+log = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
