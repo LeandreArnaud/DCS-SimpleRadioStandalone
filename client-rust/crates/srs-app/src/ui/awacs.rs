@@ -9,6 +9,7 @@ use srs_dcs::{FreqMode, SimultaneousTransmissionControl};
 use srs_protocol::Modulation;
 
 use super::radio_widgets::{self as rw, RadioAction, RadioUiCtx};
+use super::theme;
 
 pub const MIN_W: f32 = 805.0;
 pub const MIN_H: f32 = 220.0;
@@ -79,21 +80,29 @@ pub fn awacs_viewport(
                 out.geometry.x = r.min.x;
                 out.geometry.y = r.min.y;
             }
-            let fill = egui::Color32::from_black_alpha(200);
             egui::CentralPanel::default()
-                .frame(egui::Frame::NONE.fill(fill).inner_margin(4.0))
+                .frame(theme::overlay_frame())
                 .show(ui, |ui| {
                     ui.set_opacity(out.geometry.opacity.clamp(0.05, 1.0));
                     ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new("SRS AWACS").strong().color(rw::WHITE));
+                        ui.label(
+                            egui::RichText::new("SRS AWACS")
+                                .family(theme::bold())
+                                .color(theme::palette::AMBER),
+                        );
+                        ui.spacing_mut().slider_width = 80.0;
                         ui.add(egui::Slider::new(&mut out.geometry.opacity, 0.05..=1.0).show_value(false))
                             .on_hover_text("Opacity");
-                        if !taskbar_hide && ui.small_button("_").clicked() {
-                            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Minimized(true));
-                        }
-                        if ui.small_button("x").clicked() {
-                            out.close = true;
-                        }
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if theme::ghost_button(ui, "✕").clicked() {
+                                out.close = true;
+                            }
+                            if !taskbar_hide
+                                && theme::ghost_button(ui, "–").on_hover_text("Minimise").clicked()
+                            {
+                                ui.ctx().send_viewport_cmd(egui::ViewportCommand::Minimized(true));
+                            }
+                        });
                     });
                     out.actions = awacs_panel(ui, ctx, true);
                     if ui
@@ -155,10 +164,12 @@ pub fn awacs_panel(ui: &mut egui::Ui, ctx: &AwacsCtx<'_>, dark: bool) -> Vec<Rad
     let connected = ctx.base.connected && rs.dcs.is_current();
     egui::ScrollArea::horizontal().show(ui, |ui| {
         ui.horizontal_top(|ui| {
-            intercom_group(ui, &mut rs, connected, text_color);
+            ui.spacing_mut().item_spacing.x = 4.0;
+            theme::tile(ui, |ui| intercom_group(ui, &mut rs, connected, text_color));
             for i in 1..rs.dcs.radios.len().min(11) {
-                ui.separator();
-                radio_group(ui, ctx, &mut rs, i, connected, text_color, &mut actions);
+                theme::tile(ui, |ui| {
+                    radio_group(ui, ctx, &mut rs, i, connected, text_color, &mut actions)
+                });
             }
         });
     });
@@ -185,7 +196,15 @@ fn intercom_group(ui: &mut egui::Ui, rs: &mut RadioState, connected: bool, text_
         if rw::indicator(ui, color, 12.0) && is_intercom {
             rw::select(rs, 0);
         }
-        ui.label(egui::RichText::new(if is_intercom { "Intercom" } else { "No Intercom" }).color(text_color));
+        ui.label(
+            egui::RichText::new(if is_intercom { "Intercom" } else { "No Intercom" })
+                .small()
+                .color(if is_intercom {
+                    text_color
+                } else {
+                    theme::palette::TEXT_DIM
+                }),
+        );
         if is_intercom {
             rw::volume_slider(ui, rs, 0, true);
         }
@@ -208,9 +227,13 @@ fn radio_group(
         if !connected || radio.modulation == Modulation::Disabled {
             ui.horizontal(|ui| {
                 rw::indicator(ui, rw::RED, 12.0);
-                ui.label(egui::RichText::new("No Radio").small().color(text_color));
+                ui.label(
+                    egui::RichText::new("No Radio")
+                        .small()
+                        .color(theme::palette::TEXT_DIM),
+                );
             });
-            ui.label(egui::RichText::new("---").monospace().color(rw::RX_GREEN));
+            theme::readout(ui, egui::RichText::new("---").color(theme::palette::GRAY));
             return;
         }
         ui.horizontal(|ui| {
@@ -232,18 +255,14 @@ fn radio_group(
                     .color(if secondary { rw::RED } else { rw::WHITE });
             rw::freq_label(ui, rs, i, t);
         } else if radio.modulation == Modulation::Intercom {
-            ui.label(
-                egui::RichText::new(format!("INT. {i}"))
-                    .monospace()
-                    .color(rw::RX_GREEN),
-            );
+            theme::readout(ui, egui::RichText::new(format!("INT. {i}")).color(rw::RX_GREEN));
         } else {
             editable_frequency(ui, ctx, rs, i, &radio);
             let tuned = rw::tuned_count(&ctx.base, rs, &radio);
             let meta = egui::RichText::new(rw::awacs_metadata(&radio, tuned))
                 .small()
                 .color(rw::RX_GREEN);
-            rw::freq_label(ui, rs, i, meta);
+            rw::freq_text_label(ui, rs, i, meta);
         }
         if radio.modulation != Modulation::Intercom {
             rw::frequency_buttons(ui, rs, i, ctx.base.rotary_style);
@@ -320,7 +339,9 @@ fn editable_frequency(
         can_edit,
         egui::TextEdit::singleline(&mut text)
             .desired_width(64.0)
-            .char_limit(7),
+            .char_limit(7)
+            .font(egui::TextStyle::Monospace)
+            .text_color(rw::RX_GREEN),
     );
     if resp.changed() {
         ui.data_mut(|d| d.insert_temp(id, text.clone()));

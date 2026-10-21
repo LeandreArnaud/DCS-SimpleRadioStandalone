@@ -10,14 +10,8 @@ use srs_dcs::{
 };
 use srs_protocol::{Modulation, Transponder};
 
-pub const GREEN_TX: egui::Color32 = egui::Color32::from_rgb(0x96, 0xFF, 0x6D);
-pub const GREEN: egui::Color32 = egui::Color32::from_rgb(0x00, 0x80, 0x00);
-pub const RX_GREEN: egui::Color32 = egui::Color32::from_rgb(0x00, 0xFF, 0x00);
-pub const ORANGE: egui::Color32 = egui::Color32::from_rgb(0xFF, 0xA5, 0x00);
-pub const DARK_BLUE: egui::Color32 = egui::Color32::from_rgb(0x00, 0x00, 0x8B);
-pub const SIMUL_BLUE: egui::Color32 = egui::Color32::from_rgb(0x4F, 0x86, 0xFF);
-pub const RED: egui::Color32 = egui::Color32::from_rgb(0xE0, 0x30, 0x30);
-pub const WHITE: egui::Color32 = egui::Color32::WHITE;
+use super::theme;
+pub use super::theme::palette::{DARK_BLUE, GREEN, GREEN_TX, ORANGE, RED, RX_GREEN, SIMUL_BLUE, WHITE};
 
 /// Per-frame read-only context for the radio widgets.
 pub struct RadioUiCtx<'a> {
@@ -153,21 +147,25 @@ pub fn tuned_count(ctx: &RadioUiCtx<'_>, rs: &RadioState, radio: &DcsRadio) -> i
     )
 }
 
-/// Clickable indicator circle. Returns true when clicked.
+/// Clickable indicator LED. Returns true when clicked.
 pub fn indicator(ui: &mut egui::Ui, color: egui::Color32, size: f32) -> bool {
-    let (rect, resp) = ui.allocate_exact_size(egui::vec2(size, size), egui::Sense::click());
-    ui.painter().circle_filled(rect.center(), size / 2.0, color);
-    ui.painter().circle_stroke(
-        rect.center(),
-        size / 2.0,
-        egui::Stroke::new(1.0, egui::Color32::BLACK),
-    );
-    resp.clicked()
+    theme::led(ui, color, size).clicked()
 }
 
 /// Left click = select, right click = toggle guard (both also select).
+/// Drawn as an instrument readout.
 pub fn freq_label(ui: &mut egui::Ui, rs: &mut RadioState, i: usize, text: egui::RichText) {
+    let resp = theme::readout(ui, text);
+    freq_response(rs, i, &resp);
+}
+
+/// Same click rules on a plain label (metadata lines).
+pub fn freq_text_label(ui: &mut egui::Ui, rs: &mut RadioState, i: usize, text: egui::RichText) {
     let resp = ui.add(egui::Label::new(text).sense(egui::Sense::click()));
+    freq_response(rs, i, &resp);
+}
+
+fn freq_response(rs: &mut RadioState, i: usize, resp: &egui::Response) {
     if resp.secondary_clicked() && rh::toggle_guard(&mut rs.dcs, i) {
         rs.force_sync = true;
     }
@@ -200,20 +198,18 @@ pub fn frequency_buttons(ui: &mut egui::Ui, rs: &mut RadioState, i: usize, rotar
         ]
     };
     let mut delta = None;
-    ui.horizontal(|ui| {
-        for (d, label) in steps {
-            if ui.small_button(format!("+{label}")).clicked() {
-                delta = Some(*d);
+    for sign in [1.0, -1.0] {
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 3.0;
+            ui.spacing_mut().button_padding = egui::vec2(5.0, 2.0);
+            for (d, label) in steps {
+                let text = format!("{}{label}", if sign > 0.0 { "+" } else { "-" });
+                if ui.small_button(text).clicked() {
+                    delta = Some(sign * *d);
+                }
             }
-        }
-    });
-    ui.horizontal(|ui| {
-        for (d, label) in steps {
-            if ui.small_button(format!("-{label}")).clicked() {
-                delta = Some(-*d);
-            }
-        }
-    });
+        });
+    }
     if let Some(d) = delta {
         let (changed, _) = rh::update_frequency(&mut rs.dcs, d, i, true, true, rotary);
         if changed {
@@ -369,7 +365,7 @@ pub fn transponder_panel(ui: &mut egui::Ui, rs: &mut RadioState) {
     let iff = info.iff.clone();
     ui.horizontal(|ui| {
         let color = if !fitted {
-            egui::Color32::GRAY
+            theme::palette::GRAY
         } else if on {
             GREEN_TX
         } else {

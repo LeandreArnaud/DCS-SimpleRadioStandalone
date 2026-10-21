@@ -114,6 +114,26 @@ RequireAdmin, passthrough micro, aperçu audio, localisation.
   (le C# lit le disque depuis le thread audio) ; le nom du modèle radio de l'émetteur est résolu par le thread
   de décodage au lieu du thread audio.
 
+## Thème UI (M7)
+
+- Dark uniquement : `ui/theme.rs` installe polices et style une fois (`theme::install`). La clé `DarkMode` reste dans
+  `global.cfg` (append-only, lue par le C#) mais le client Rust l'ignore ; le toggle n'est plus affiché.
+- Palette « cockpit de nuit » (`theme::palette`) : fonds gris-bleu sombres, accent ambre `#FFB000` (sélection,
+  survol, boutons principaux, soulignement d'onglet). Les couleurs SRS (vert TX/RX, orange non sélectionnée, bleu
+  simul, rouge) gardent leur sens, tons adoucis ; `DARK_BLUE` `#00008B` (invisible sur fond sombre) → `#3B63C4`.
+- Police B612 (afficheurs cockpit Airbus, SIL OFL 1.1) embarquée par `include_bytes!` depuis
+  `crates/srs-app/assets/fonts/` (+ `OFL.txt`) ; polices egui gardées en repli (emoji/icônes).
+- Helpers de rendu : `led` (LED + halo), `readout` (fréquence dans un cadre inset mono, cliquable), `card` / `tile` /
+  `inset`, `primary_button` / `danger_button` / `ghost_button`, `pill`, `vu_meter`, `tab_bar`. Ils ne changent pas
+  les actions (clic gauche = sélection, droit = garde, etc.).
+- Fenêtre principale : `Panel::top` (titre, LEDs SRV/VOIP/DCS, badge CONNECTED/OFFLINE/EAM, onglets) et
+  `Panel::bottom` (profil/unité/clients/position + badge TX) ; onglet General en cartes.
+- Changements de comportement assumés : `clear_color` est transparent (les overlays `with_transparent` laissent
+  voir le jeu à travers leur cadre semi-transparent et le curseur d'opacité agit vraiment ; la fenêtre principale
+  est entièrement couverte par ses panneaux) ; correction de l'échelle de l'overlay radio (`h / MIN_H` au lieu de
+  `h / MIN_W`, qui écrasait le texte à l'agrandissement). Non vérifié ici : rendu sur Windows (transparence DWM,
+  lisibilité des polices au-dessus de DCS).
+
 ## Livraison pour test Windows
 
 `client-rust/tools/package.sh --build` produit `client-rust/dist/SRS-Client-Rust-<version>.zip` (exe +
@@ -146,3 +166,4 @@ RequireAdmin, passthrough micro, aperçu audio, localisation.
 | M4 DCS + entrées | code fait, à valider sur le PC Windows avec DCS | `srs-dcs::merge` (port ligne à ligne de `UpdateRadioAsync`, 7 tests), `radio_helper` (RadioHelper), `srs-client::dcs_io` (listeners 9084/5068/9085/5069/9040, sorties 7080/7082/9086), `dcs_sync` (ProcessRadioInfoAsync, GameGUI, LOS, commandes, péremption 10 s), `combined_state` (JSON overlay), `srs-input` (résolution des binds, actions, poller 40 ms, DirectInput8 + XInput sous Windows, table `SharpDX.Key`), `ptt` (PTTHandler : délais, switches radio). Test local `dcs_sync_local` (faux export/GameGUI/commande/auto-connect) vert |
 | M5 LOS / distance / effets | code fait, à valider à l'oreille sur Windows | LOS/distance (M2), `CurrentlyBlockedRadios` (IRL_RADIO_TX), retransmission (`RetransmitAudio`), chaîne d'effets complète (`effects/`), ambiance cockpit, tonalités début/fin RX et TX (`play_*_transmit` depuis l'encodeur), modèle RX + capture FM dans le mixeur, loader `RadioModels[Custom]/*.json` (+ défauts), presets `.txt` + serveur, `TransponderHelper` + commandes UDP. 40 tests dans `srs-audio`, écho serveur réel toujours vert. Non vérifiable ici : rendu sonore vs C# (procédure README) |
 | M6 UI complète + migration | code fait, à valider sur Windows | Fenêtre principale (périphériques par ID WASAPI, favoris CSV, dossier presets, EAM, boost, VU, PTT, pied de page), onglets Settings (toutes les clés global/profil), Controls, Favourites, Clients (tri, R, mute), Server, Log, Help ; profils (créer/copier/renommer/supprimer, sélection auto) ; overlay radio (5 radios dynamiques, intercom, transpondeur, presets, chiffrement, RT, position/taille/opacité persistées) ; overlay AWACS (10 radios, fréquence éditable, SIMUL, intercom 1-30, mode instructeur) ; invite mismatch auto-connect ; sons de connexion ; mutex `-allowMultiple` ; `clientlog.txt` ; position fenêtre, dark mode, start minimised. Non vérifiable ici : rendu Windows, DirectInput réel, transparence overlay au-dessus de DCS |
+| M7 thème UI « cockpit » | code fait, à valider à l'œil sur Windows | `ui/theme.rs` (palette, B612, helpers), header/footer en panneaux, cartes, overlays en tuiles avec readouts, dark uniquement (`DarkMode` ignoré), `clear_color` transparent, fix échelle overlay. Non vérifiable ici : rendu Windows (captures Mac impossibles sans permission d'enregistrement d'écran du terminal) |

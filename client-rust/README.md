@@ -75,6 +75,11 @@ Copy the zip to the PC, unzip, and:
    choice uses the same device ids as the C# client, so an existing `global.cfg` keeps its devices.
    Starting the exe twice must show the "already running" box unless `-allowMultiple`.
 
+8. Theme (M7): the window is dark only (the `DarkMode` key is ignored), amber accents, B612 fonts
+   (`crates/srs-app/assets/fonts/`, SIL Open Font License 1.1). The overlays must show the game through
+   their frame and the opacity slider must really fade them. Check that the readouts stay legible at
+   the overlay size you use in DCS; the radio overlay scales its text with its size.
+
 Report what fails with the *Log* tab content or `clientlog.txt` (written next to the exe; `RUST_LOG=debug`
 for more detail).
 

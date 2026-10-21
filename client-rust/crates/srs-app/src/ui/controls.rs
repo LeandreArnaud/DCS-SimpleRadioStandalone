@@ -53,7 +53,7 @@ pub fn controls_panel(
     });
     if let Some(b) = pending_assign {
         ui.colored_label(
-            egui::Color32::YELLOW,
+            super::theme::palette::AMBER,
             format!("Press the input for {}…", b.as_str()),
         );
     }

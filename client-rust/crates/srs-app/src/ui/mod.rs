@@ -9,6 +9,7 @@ mod overlay;
 mod radio_widgets;
 mod server_settings;
 mod settings;
+mod theme;
 
 use std::collections::{HashMap, VecDeque};
 use std::time::{Duration, Instant};
@@ -22,6 +23,7 @@ use srs_client::{AppEvent, Client, ClientState};
 
 use crate::args::Args;
 use radio_widgets::{RadioAction, RadioUiCtx};
+use theme::palette as pal;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Tab {
@@ -138,7 +140,7 @@ impl App {
             y: settings.get_f64(GlobalSettingsKey::AwacsY) as f32,
             opacity: 1.0,
         };
-        apply_theme(&cc.egui_ctx, settings.get_bool(GlobalSettingsKey::DarkMode));
+        theme::install(&cc.egui_ctx);
         let presets_folder = settings.get_raw(GlobalSettingsKey::LastPresetsFolder);
         let mut app = Self {
             args,
@@ -332,8 +334,8 @@ impl App {
     }
 
     fn settings_tab(&mut self, ui: &mut egui::Ui) {
-        self.profile_row(ui);
-        ui.separator();
+        theme::card(ui, Some("Profile"), |ui| self.profile_row(ui));
+        ui.add_space(6.0);
         let names = |list: &[srs_audio::effects::CachedEffect]| -> Vec<String> {
             list.iter()
                 .filter(|e| e.loaded())
@@ -364,7 +366,6 @@ impl App {
             self.push_log("Radio overlay reset");
         }
         if change.changed {
-            apply_theme(ui.ctx(), self.settings.get_bool(GlobalSettingsKey::DarkMode));
             self.apply_all_settings();
         }
     }
@@ -375,7 +376,6 @@ impl App {
         let current = self.profile.name().to_string();
         let mut selected = current.clone();
         ui.horizontal(|ui| {
-            ui.label("Profile:");
             egui::ComboBox::from_id_salt("profile")
                 .selected_text(&current)
                 .show_ui(ui, |ui| {
@@ -405,7 +405,7 @@ impl App {
                     });
                 }
             }
-            if ui.button("Delete").clicked() {
+            if theme::danger_button(ui, "Delete").clicked() {
                 if current == "default" {
                     self.push_log("Cannot delete the default profile");
                 } else {
@@ -895,174 +895,79 @@ impl App {
         }
     }
 
-    fn general_tab(&mut self, ui: &mut egui::Ui) {
-        let connected = self.net.is_connected();
-        // Audio devices (disabled while connected, like the C# client).
-        let mic_available = !self.input_list.is_empty();
-        Self::device_combo(
-            ui,
-            &mut self.settings,
-            GlobalSettingsKey::AudioInputDeviceId,
-            "Microphone",
-            "Default Microphone",
-            &self.input_list,
-            !connected && mic_available,
-        );
-        if !mic_available {
-            ui.colored_label(egui::Color32::YELLOW, "No microphone found");
-        }
-        Self::device_combo(
-            ui,
-            &mut self.settings,
-            GlobalSettingsKey::AudioOutputDeviceId,
-            "Speakers",
-            "Default Speakers",
-            &self.output_list,
-            !connected,
-        );
-        ui.separator();
-        ui.horizontal(|ui| {
-            ui.label("Server:");
-            ui.add_enabled(
-                !connected,
-                egui::TextEdit::singleline(&mut self.server_address).desired_width(200.0),
-            );
-            let mut picked: Option<usize> = None;
-            ui.add_enabled_ui(!connected, |ui| {
-                egui::ComboBox::from_id_salt("fav-pick")
-                    .selected_text("Favourites")
-                    .width(110.0)
-                    .show_ui(ui, |ui| {
-                        for (i, f) in self.favourites.servers.iter().enumerate() {
-                            if ui
-                                .selectable_label(false, format!("{} ({})", f.name, f.address))
-                                .clicked()
-                            {
-                                picked = Some(i);
-                            }
+    /// Title, status LEDs and tab strip.
+    fn header_panel(&mut self, ui: &mut egui::Ui) {
+        let connected = self.tcp_connected && self.synced;
+        let voip = self.voip_ready;
+        let dcs = self.net.radio_state.lock().is_game_connected();
+        let eam = self.eam_coalition;
+        egui::Panel::top("header")
+            .frame(
+                egui::Frame::NONE
+                    .fill(pal::BG)
+                    .inner_margin(egui::Margin {
+                        left: 12,
+                        right: 12,
+                        top: 8,
+                        bottom: 0,
+                    })
+                    .stroke(egui::Stroke::new(1.0, pal::STROKE)),
+            )
+            .show_separator_line(false)
+            .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label(
+                        egui::RichText::new("DCS-SRS")
+                            .family(theme::bold())
+                            .size(18.0)
+                            .color(pal::AMBER),
+                    );
+                    ui.label(
+                        egui::RichText::new(crate::CLIENT_VERSION)
+                            .small()
+                            .color(pal::TEXT_DIM),
+                    );
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if let Some(c) = eam {
+                            theme::pill(
+                                ui,
+                                &format!("EAM {}", coalition_name(c).to_uppercase()),
+                                pal::SIMUL_BLUE,
+                            );
                         }
+                        if connected {
+                            theme::pill(ui, "CONNECTED", pal::RX_GREEN);
+                        } else {
+                            theme::pill(ui, "OFFLINE", pal::TEXT_DIM);
+                        }
+                        ui.add_space(8.0);
+                        status_led(ui, dcs, "DCS");
+                        status_led(ui, voip, "VOIP");
+                        status_led(ui, connected, "SRV");
                     });
-            });
-            if let Some(i) = picked {
-                self.use_favourite(i);
-            }
-            if connected {
-                if ui.button("Disconnect").clicked() {
-                    self.disconnect();
-                }
-            } else if ui.button("Connect").clicked() {
-                self.connect();
-            }
-        });
-        ui.horizontal(|ui| {
-            status_dot(ui, self.tcp_connected && self.synced, "Server");
-            status_dot(ui, self.voip_ready, "VoIP");
-            status_dot(ui, self.net.radio_state.lock().is_game_connected(), "DCS");
-            ui.label(&self.status_line);
-        });
-        ui.horizontal(|ui| {
-            let mut single = self.show_overlay;
-            if ui.toggle_value(&mut single, "Radio overlay").clicked() {
-                self.last_overlay_toggle = None;
-                self.toggle_overlay(false);
-            }
-            let mut awacs = self.show_awacs;
-            if ui.toggle_value(&mut awacs, "AWACS overlay").clicked() {
-                self.last_overlay_toggle = None;
-                self.toggle_overlay(true);
-            }
-            if ui
-                .add_enabled(connected, egui::Button::new("Server settings"))
-                .clicked()
-            {
-                self.tab = Tab::Server;
-            }
-            if ui
-                .add_enabled(connected, egui::Button::new("Client list"))
-                .clicked()
-            {
-                self.tab = Tab::Clients;
-            }
-        });
-        ui.horizontal(|ui| {
-            ui.label("Presets folder:");
-            let eam = self.eam_coalition.is_some();
-            let resp = ui.add_enabled(
-                !eam,
-                egui::TextEdit::singleline(&mut self.presets_folder)
-                    .desired_width(220.0)
-                    .hint_text("(default: working directory)"),
-            );
-            if resp.lost_focus() {
-                self.settings
-                    .set_raw(GlobalSettingsKey::LastPresetsFolder, self.presets_folder.trim());
-                self.apply_all_settings();
-                self.reload_all_channels();
-            }
-            if ui.add_enabled(!eam, egui::Button::new("Reset")).clicked() {
-                self.presets_folder.clear();
-                self.settings.set_raw(GlobalSettingsKey::LastPresetsFolder, "");
-                self.apply_all_settings();
-                self.reload_all_channels();
-            }
-        });
-        ui.separator();
-        self.eam_block(ui);
-        ui.separator();
-        if ui
-            .add(egui::Slider::new(&mut self.speaker_boost, 0.0..=1.0).text("Speaker boost"))
-            .changed()
-        {
-            self.net.engine.lock().master.volume = srs_audio::volume::slider_to_scale(self.speaker_boost);
-            self.settings
-                .set_f64(GlobalSettingsKey::SpeakerBoost, f64::from(self.speaker_boost));
-        }
-        let scale = srs_audio::volume::slider_to_scale(self.speaker_boost);
-        ui.small(format!("{:.0} dB", 20.0 * f64::from(scale).log10()));
-        let peak = self.net.engine.lock().master.peak;
-        ui.add(
-            egui::ProgressBar::new(peak)
-                .text(format!("speaker {:.0} dB", srs_audio::volume::float_to_db(peak))),
-        );
-        ui.horizontal(|ui| {
-            let held = ui
-                .add(
-                    egui::Button::new(egui::RichText::new("PTT (hold)").strong())
-                        .min_size(egui::vec2(110.0, 32.0)),
-                )
-                .is_pointer_button_down_on();
-            let space =
-                ui.input(|i| i.key_down(egui::Key::Space)) && ui.ctx().memory(|m| m.focused().is_none());
-            self.net
-                .tx
-                .ui_ptt
-                .store(held || space, std::sync::atomic::Ordering::Relaxed);
-            let sending = self.net.radio_state.lock().sending.clone();
-            if sending.is_sending {
-                ui.colored_label(
-                    egui::Color32::LIGHT_RED,
-                    format!("TX on radio {:?}", sending.sending_on),
+                });
+                ui.add_space(4.0);
+                theme::tab_bar(
+                    ui,
+                    &mut self.tab,
+                    &[
+                        (Tab::General, "General"),
+                        (Tab::Radios, "Radios"),
+                        (Tab::Controls, "Controls"),
+                        (Tab::Settings, "Settings"),
+                        (Tab::Favourites, "Favourites"),
+                        (Tab::Clients, "Clients"),
+                        (Tab::Server, "Server"),
+                        (Tab::Log, "Log"),
+                        (Tab::Help, "Help"),
+                    ],
                 );
-            } else {
-                ui.label("idle (hold the button or Space to talk)");
-            }
-        });
-        let mic_db = self.net.tx.mic_level_db();
-        let mic_ok = self
-            .net
-            .tx
-            .mic_available
-            .load(std::sync::atomic::Ordering::Relaxed);
-        ui.add(
-            egui::ProgressBar::new(((mic_db + 60.0) / 60.0).clamp(0.0, 1.0)).text(if mic_ok {
-                format!("mic {mic_db:.0} dB")
-            } else {
-                "no microphone".to_string()
-            }),
-        );
-        ui.separator();
-        // Footer (profile, unit, clients, position).
-        let (unit, pos) = {
+            });
+    }
+
+    /// Profile / unit / clients / position, and the TX indicator.
+    fn footer_panel(&mut self, ui: &mut egui::Ui) {
+        let (unit, pos, sending) = {
             let rs = self.net.radio_state.lock();
             let unit = if rs.dcs.is_current() {
                 rs.dcs.unit.clone()
@@ -1070,15 +975,258 @@ impl App {
                 "-".into()
             };
             let p = rs.side.position;
-            (unit, format!("{:.5}, {:.5} alt {:.0}", p.lat, p.lng, p.alt))
+            (
+                unit,
+                format!("{:.5}, {:.5} alt {:.0}", p.lat, p.lng, p.alt),
+                rs.sending.clone(),
+            )
         };
-        ui.small(format!(
-            "Profile: {}   Unit: {}   Clients: {}   Position: {}",
-            self.profile.name(),
-            unit,
-            self.net.shared.client_count(),
-            pos
-        ));
+        let clients = self.net.shared.client_count();
+        let profile = self.profile.name().to_string();
+        egui::Panel::bottom("footer")
+            .frame(
+                egui::Frame::NONE
+                    .fill(pal::BG)
+                    .inner_margin(egui::Margin::symmetric(12, 5))
+                    .stroke(egui::Stroke::new(1.0, pal::STROKE)),
+            )
+            .show_separator_line(false)
+            .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = 14.0;
+                    let dim = |t: String| egui::RichText::new(t).small().color(pal::TEXT_DIM);
+                    ui.label(dim(format!("Profile {profile}")));
+                    ui.label(dim(format!("Unit {unit}")));
+                    ui.label(dim(format!("Clients {clients}")));
+                    ui.label(dim(format!("Pos {pos}")));
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if sending.is_sending {
+                            let on = sending
+                                .sending_on
+                                .map(|r| format!("TX RADIO {r}"))
+                                .unwrap_or_else(|| "TX".into());
+                            theme::pill(ui, &on, pal::GREEN_TX);
+                        }
+                    });
+                });
+            });
+    }
+
+    fn general_tab(&mut self, ui: &mut egui::Ui) {
+        let connected = self.net.is_connected();
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            theme::card(ui, Some("Connection"), |ui| {
+                ui.horizontal(|ui| {
+                    ui.label("Server");
+                    ui.add_enabled(
+                        !connected,
+                        egui::TextEdit::singleline(&mut self.server_address)
+                            .desired_width(200.0)
+                            .font(egui::TextStyle::Monospace),
+                    );
+                    let mut picked: Option<usize> = None;
+                    ui.add_enabled_ui(!connected, |ui| {
+                        egui::ComboBox::from_id_salt("fav-pick")
+                            .selected_text("Favourites")
+                            .width(110.0)
+                            .show_ui(ui, |ui| {
+                                for (i, f) in self.favourites.servers.iter().enumerate() {
+                                    if ui
+                                        .selectable_label(false, format!("{} ({})", f.name, f.address))
+                                        .clicked()
+                                    {
+                                        picked = Some(i);
+                                    }
+                                }
+                            });
+                    });
+                    if let Some(i) = picked {
+                        self.use_favourite(i);
+                    }
+                    if connected {
+                        if theme::danger_button(ui, "Disconnect").clicked() {
+                            self.disconnect();
+                        }
+                    } else if theme::primary_button(ui, "Connect").clicked() {
+                        self.connect();
+                    }
+                });
+                ui.label(
+                    egui::RichText::new(&self.status_line)
+                        .small()
+                        .color(pal::TEXT_DIM),
+                );
+                ui.horizontal(|ui| {
+                    ui.label("Presets folder");
+                    let eam = self.eam_coalition.is_some();
+                    let resp = ui.add_enabled(
+                        !eam,
+                        egui::TextEdit::singleline(&mut self.presets_folder)
+                            .desired_width(220.0)
+                            .hint_text("(default: working directory)"),
+                    );
+                    if resp.lost_focus() {
+                        self.settings
+                            .set_raw(GlobalSettingsKey::LastPresetsFolder, self.presets_folder.trim());
+                        self.apply_all_settings();
+                        self.reload_all_channels();
+                    }
+                    if ui.add_enabled(!eam, egui::Button::new("Reset")).clicked() {
+                        self.presets_folder.clear();
+                        self.settings.set_raw(GlobalSettingsKey::LastPresetsFolder, "");
+                        self.apply_all_settings();
+                        self.reload_all_channels();
+                    }
+                });
+            });
+            ui.add_space(6.0);
+            theme::card(ui, Some("Audio"), |ui| {
+                // Audio devices (disabled while connected, like the C# client).
+                let mic_available = !self.input_list.is_empty();
+                Self::device_combo(
+                    ui,
+                    &mut self.settings,
+                    GlobalSettingsKey::AudioInputDeviceId,
+                    "Microphone",
+                    "Default Microphone",
+                    &self.input_list,
+                    !connected && mic_available,
+                );
+                if !mic_available {
+                    ui.colored_label(pal::ORANGE, "No microphone found");
+                }
+                Self::device_combo(
+                    ui,
+                    &mut self.settings,
+                    GlobalSettingsKey::AudioOutputDeviceId,
+                    "Speakers",
+                    "Default Speakers",
+                    &self.output_list,
+                    !connected,
+                );
+                ui.add_space(4.0);
+                ui.horizontal(|ui| {
+                    if ui
+                        .add(egui::Slider::new(&mut self.speaker_boost, 0.0..=1.0).show_value(false))
+                        .changed()
+                    {
+                        self.net.engine.lock().master.volume =
+                            srs_audio::volume::slider_to_scale(self.speaker_boost);
+                        self.settings
+                            .set_f64(GlobalSettingsKey::SpeakerBoost, f64::from(self.speaker_boost));
+                    }
+                    let scale = srs_audio::volume::slider_to_scale(self.speaker_boost);
+                    ui.label("Speaker boost");
+                    ui.label(
+                        egui::RichText::new(format!("{:+.0} dB", 20.0 * f64::from(scale).log10()))
+                            .small()
+                            .monospace()
+                            .color(pal::TEXT_DIM),
+                    );
+                });
+                let peak = self.net.engine.lock().master.peak;
+                ui.horizontal(|ui| {
+                    theme::vu_meter(ui, peak, egui::vec2(220.0, 14.0));
+                    ui.label(
+                        egui::RichText::new(format!("out {:.0} dB", srs_audio::volume::float_to_db(peak)))
+                            .small()
+                            .monospace()
+                            .color(pal::TEXT_DIM),
+                    );
+                });
+                let mic_db = self.net.tx.mic_level_db();
+                let mic_ok = self
+                    .net
+                    .tx
+                    .mic_available
+                    .load(std::sync::atomic::Ordering::Relaxed);
+                ui.horizontal(|ui| {
+                    theme::vu_meter(
+                        ui,
+                        ((mic_db + 60.0) / 60.0).clamp(0.0, 1.0),
+                        egui::vec2(220.0, 14.0),
+                    );
+                    ui.label(
+                        egui::RichText::new(if mic_ok {
+                            format!("mic {mic_db:.0} dB")
+                        } else {
+                            "no microphone".to_string()
+                        })
+                        .small()
+                        .monospace()
+                        .color(pal::TEXT_DIM),
+                    );
+                });
+            });
+            ui.add_space(6.0);
+            theme::card(ui, Some("Overlays"), |ui| {
+                ui.horizontal(|ui| {
+                    let mut single = self.show_overlay;
+                    if ui.toggle_value(&mut single, "Radio overlay").clicked() {
+                        self.last_overlay_toggle = None;
+                        self.toggle_overlay(false);
+                    }
+                    let mut awacs = self.show_awacs;
+                    if ui.toggle_value(&mut awacs, "AWACS overlay").clicked() {
+                        self.last_overlay_toggle = None;
+                        self.toggle_overlay(true);
+                    }
+                    ui.add_space(8.0);
+                    if ui
+                        .add_enabled(connected, egui::Button::new("Server settings"))
+                        .clicked()
+                    {
+                        self.tab = Tab::Server;
+                    }
+                    if ui
+                        .add_enabled(connected, egui::Button::new("Client list"))
+                        .clicked()
+                    {
+                        self.tab = Tab::Clients;
+                    }
+                });
+            });
+            ui.add_space(6.0);
+            theme::card(ui, Some("External AWACS mode"), |ui| self.eam_block(ui));
+            ui.add_space(6.0);
+            theme::card(ui, Some("Push to talk"), |ui| {
+                ui.horizontal(|ui| {
+                    let held = ui
+                        .add(
+                            egui::Button::new(
+                                egui::RichText::new("PTT (hold)")
+                                    .family(theme::bold())
+                                    .color(pal::INSET),
+                            )
+                            .fill(pal::AMBER)
+                            .stroke(egui::Stroke::NONE)
+                            .min_size(egui::vec2(110.0, 32.0)),
+                        )
+                        .is_pointer_button_down_on();
+                    let space = ui.input(|i| i.key_down(egui::Key::Space))
+                        && ui.ctx().memory(|m| m.focused().is_none());
+                    self.net
+                        .tx
+                        .ui_ptt
+                        .store(held || space, std::sync::atomic::Ordering::Relaxed);
+                    let sending = self.net.radio_state.lock().sending.clone();
+                    if sending.is_sending {
+                        let text = sending
+                            .sending_on
+                            .map(|r| format!("TX on radio {r}"))
+                            .unwrap_or_else(|| "TX".into());
+                        theme::led(ui, pal::GREEN_TX, 12.0);
+                        ui.colored_label(pal::GREEN_TX, text);
+                    } else {
+                        ui.label(
+                            egui::RichText::new("idle (hold the button or Space to talk)")
+                                .small()
+                                .color(pal::TEXT_DIM),
+                        );
+                    }
+                });
+            });
+        });
     }
 
     fn use_favourite(&mut self, i: usize) {
@@ -1091,7 +1239,7 @@ impl App {
     }
 
     fn eam_block(&mut self, ui: &mut egui::Ui) {
-        ui.collapsing("External AWACS Mode", |ui| {
+        {
             ui.horizontal(|ui| {
                 ui.label("Name:");
                 ui.add_enabled(
@@ -1118,8 +1266,11 @@ impl App {
                     .unwrap_or(false);
             match self.eam_coalition {
                 Some(c) => {
-                    ui.label(format!("Connected as {}", coalition_name(c)));
-                    if ui.button("Disconnect EAM").clicked() {
+                    ui.horizontal(|ui| {
+                        ui.label("Connected as");
+                        theme::pill(ui, &coalition_name(c).to_uppercase(), pal::SIMUL_BLUE);
+                    });
+                    if theme::danger_button(ui, "Disconnect EAM").clicked() {
                         self.stop_all_instructor();
                         self.eam_coalition = None;
                         self.net.state.lock().coalition = 0;
@@ -1131,7 +1282,8 @@ impl App {
                 }
                 None => {
                     if ui
-                        .add_enabled(eam_available, egui::Button::new("Connect EAM"))
+                        .add_enabled_ui(eam_available, |ui| theme::primary_button(ui, "Connect EAM"))
+                        .inner
                         .clicked()
                     {
                         let name = self.eam_name.trim().to_string();
@@ -1141,35 +1293,53 @@ impl App {
                         });
                     }
                     if !eam_available {
-                        ui.small("(server has EAM disabled or not connected)");
+                        ui.label(
+                            egui::RichText::new("(server has EAM disabled or not connected)")
+                                .small()
+                                .color(pal::TEXT_DIM),
+                        );
                     }
                 }
             }
-        });
+        }
     }
 
     fn log_tab(&mut self, ui: &mut egui::Ui) {
-        egui::ScrollArea::vertical().stick_to_bottom(true).show(ui, |ui| {
-            for line in &self.log {
-                ui.monospace(line);
-            }
+        theme::inset(ui, |ui| {
+            ui.set_height(ui.available_height());
+            egui::ScrollArea::vertical().stick_to_bottom(true).show(ui, |ui| {
+                for line in &self.log {
+                    ui.label(egui::RichText::new(line).monospace().size(12.0).color(pal::TEXT));
+                }
+            });
         });
     }
 
     fn help_tab(&mut self, ui: &mut egui::Ui) {
-        ui.heading(format!("DCS-SRS Client (Rust) {}", crate::CLIENT_VERSION));
-        ui.label("Drop-in replacement for SR-ClientRadio.exe: no .NET runtime needed.");
-        ui.hyperlink_to(
-            "SRS on GitHub",
-            "https://github.com/ciribob/DCS-SimpleRadioStandalone",
-        );
-        ui.hyperlink_to("Support Ciribob (Patreon)", "https://www.patreon.com/ciribob");
-        ui.separator();
-        ui.label(format!("Config directory: {}", self.settings.dir().display()));
-        ui.label(format!("Client GUID: {}", self.net.state.lock().guid));
-        ui.label("Logs: clientlog.txt in the working directory (RUST_LOG=debug for more).");
-        ui.separator();
-        ui.label("Not implemented in this build: audio recording, LotATC, VAICOM, auto-update, minimise to tray, RefocusDCS, RequireAdmin, mic passthrough.");
+        theme::card(ui, Some("About"), |ui| {
+            ui.heading(format!("DCS-SRS Client (Rust) {}", crate::CLIENT_VERSION));
+            ui.label("Drop-in replacement for SR-ClientRadio.exe: no .NET runtime needed.");
+            ui.hyperlink_to(
+                "SRS on GitHub",
+                "https://github.com/ciribob/DCS-SimpleRadioStandalone",
+            );
+            ui.hyperlink_to("Support Ciribob (Patreon)", "https://www.patreon.com/ciribob");
+        });
+        ui.add_space(6.0);
+        theme::card(ui, Some("This install"), |ui| {
+            ui.label(format!("Config directory: {}", self.settings.dir().display()));
+            ui.label(format!("Client GUID: {}", self.net.state.lock().guid));
+            ui.label("Logs: clientlog.txt in the working directory (RUST_LOG=debug for more).");
+            ui.label(
+                egui::RichText::new("Fonts: B612 (The B612 Project Authors, SIL Open Font License 1.1).")
+                    .small()
+                    .color(pal::TEXT_DIM),
+            );
+        });
+        ui.add_space(6.0);
+        theme::card(ui, Some("Not implemented"), |ui| {
+            ui.label("Audio recording, LotATC, VAICOM, auto-update, minimise to tray, RefocusDCS, RequireAdmin, mic passthrough.");
+        });
     }
 
     fn radio_ui_ctx(&self) -> (bool, i32, bool, bool) {
@@ -1243,23 +1413,10 @@ impl App {
     }
 }
 
-fn apply_theme(ctx: &egui::Context, dark: bool) {
-    ctx.set_visuals(if dark {
-        egui::Visuals::dark()
-    } else {
-        egui::Visuals::light()
-    });
-}
-
-fn status_dot(ui: &mut egui::Ui, on: bool, label: &str) {
-    let color = if on {
-        egui::Color32::from_rgb(40, 200, 60)
-    } else {
-        egui::Color32::from_rgb(200, 50, 50)
-    };
-    let (rect, _) = ui.allocate_exact_size(egui::vec2(12.0, 12.0), egui::Sense::hover());
-    ui.painter().circle_filled(rect.center(), 5.0, color);
-    ui.label(label);
+/// LED + label, used in the header status cluster.
+fn status_led(ui: &mut egui::Ui, on: bool, label: &str) {
+    theme::led(ui, if on { pal::RX_GREEN } else { pal::RED }, 11.0);
+    ui.label(egui::RichText::new(label).small().color(pal::TEXT_DIM));
 }
 
 fn coalition_name(c: i32) -> &'static str {
@@ -1271,14 +1428,11 @@ fn coalition_name(c: i32) -> &'static str {
 }
 
 impl eframe::App for App {
-    fn clear_color(&self, visuals: &egui::Visuals) -> [f32; 4] {
-        let c = visuals.window_fill();
-        [
-            c.r() as f32 / 255.0,
-            c.g() as f32 / 255.0,
-            c.b() as f32 / 255.0,
-            1.0,
-        ]
+    /// Transparent: the main window is fully covered by its panels, and the
+    /// overlay viewports (`with_transparent`) show the game through their
+    /// semi-transparent frame.
+    fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
+        [0.0, 0.0, 0.0, 0.0]
     }
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
@@ -1321,21 +1475,15 @@ impl eframe::App for App {
         }
         self.handle_events();
         let my_guid = self.net.state.lock().guid.to_string();
-        egui::CentralPanel::default().show(ui, |ui| {
-            ui.heading(format!("DCS-SRS Client {}", crate::CLIENT_VERSION));
-            ui.horizontal_wrapped(|ui| {
-                ui.selectable_value(&mut self.tab, Tab::General, "General");
-                ui.selectable_value(&mut self.tab, Tab::Radios, "Radios");
-                ui.selectable_value(&mut self.tab, Tab::Controls, "Controls");
-                ui.selectable_value(&mut self.tab, Tab::Settings, "Settings");
-                ui.selectable_value(&mut self.tab, Tab::Favourites, "Favourites");
-                ui.selectable_value(&mut self.tab, Tab::Clients, "Clients");
-                ui.selectable_value(&mut self.tab, Tab::Server, "Server");
-                ui.selectable_value(&mut self.tab, Tab::Log, "Log");
-                ui.selectable_value(&mut self.tab, Tab::Help, "Help");
-            });
-            ui.separator();
-            match self.tab {
+        self.header_panel(ui);
+        self.footer_panel(ui);
+        egui::CentralPanel::default()
+            .frame(
+                egui::Frame::NONE
+                    .fill(pal::PANEL)
+                    .inner_margin(egui::Margin::symmetric(12, 10)),
+            )
+            .show(ui, |ui| match self.tab {
                 Tab::General => self.general_tab(ui),
                 Tab::Radios => {
                     let (rotary, node_limit, instructor, connected) = self.radio_ui_ctx();
@@ -1380,8 +1528,7 @@ impl eframe::App for App {
                 }
                 Tab::Log => self.log_tab(ui),
                 Tab::Help => self.help_tab(ui),
-            }
-        });
+            });
         self.mismatch_modal(ui.ctx());
         let taskbar_hide = self.settings.get_bool(GlobalSettingsKey::RadioOverlayTaskbarHide);
         if self.show_overlay {

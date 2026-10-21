@@ -8,6 +8,7 @@ use srs_dcs::FreqMode;
 use srs_protocol::Modulation;
 
 use super::radio_widgets::{self as rw, RadioAction, RadioUiCtx};
+use super::theme;
 
 pub const MIN_W: f32 = 170.0;
 pub const MIN_H: f32 = 355.0;
@@ -77,24 +78,32 @@ pub fn radio_overlay(
                 out.geometry.h = r.height();
             }
             let scale = (out.geometry.w / MIN_W)
-                .min(out.geometry.h / MIN_W)
+                .min(out.geometry.h / MIN_H)
                 .clamp(0.1, 6.0);
-            let fill = egui::Color32::from_black_alpha(200);
             egui::CentralPanel::default()
-                .frame(egui::Frame::NONE.fill(fill).inner_margin(4.0))
+                .frame(theme::overlay_frame())
                 .show(ui, |ui| {
                     ui.set_opacity(out.geometry.opacity.clamp(0.05, 1.0));
                     rw::scale_ui(ui, scale);
                     ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new("SRS").strong().color(rw::WHITE));
+                        ui.label(
+                            egui::RichText::new("SRS")
+                                .family(theme::bold())
+                                .color(theme::palette::AMBER),
+                        );
+                        ui.spacing_mut().slider_width = 60.0 * scale;
                         ui.add(egui::Slider::new(&mut out.geometry.opacity, 0.05..=1.0).show_value(false))
                             .on_hover_text("Opacity");
-                        if !taskbar_hide && ui.small_button("_").on_hover_text("Minimise").clicked() {
-                            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Minimized(true));
-                        }
-                        if ui.small_button("x").clicked() {
-                            out.close = true;
-                        }
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if theme::ghost_button(ui, "✕").clicked() {
+                                out.close = true;
+                            }
+                            if !taskbar_hide
+                                && theme::ghost_button(ui, "–").on_hover_text("Minimise").clicked()
+                            {
+                                ui.ctx().send_viewport_cmd(egui::ViewportCommand::Minimized(true));
+                            }
+                        });
                     });
                     let mut rs = ctx.net.radio_state.lock();
                     let count = rs.dcs.radios.len();
@@ -122,15 +131,13 @@ pub fn radio_overlay(
                             srs_dcs::SwitchControls::Hotas => "HOTAS controls",
                             srs_dcs::SwitchControls::InCockpit => "Cockpit controls",
                         };
-                        ui.small(egui::RichText::new(text).color(rw::WHITE));
+                        ui.small(egui::RichText::new(text).color(theme::palette::TEXT_DIM));
                     }
                     for i in visible {
-                        radio_group(ui, ctx, &mut rs, i, &mut out.actions);
-                        ui.separator();
+                        theme::tile(ui, |ui| radio_group(ui, ctx, &mut rs, i, &mut out.actions));
                     }
-                    intercom_group(ui, &mut rs);
-                    ui.separator();
-                    rw::transponder_panel(ui, &mut rs);
+                    theme::tile(ui, |ui| intercom_group(ui, &mut rs));
+                    theme::tile(ui, |ui| rw::transponder_panel(ui, &mut rs));
                     drop(rs);
                     if ui
                         .interact(ui.max_rect(), ui.id().with("drag"), egui::Sense::drag())
@@ -163,9 +170,13 @@ fn radio_group(
     if !current || radio.modulation == Modulation::Disabled {
         ui.horizontal(|ui| {
             rw::indicator(ui, rw::RED, 12.0);
-            ui.label(egui::RichText::new("No Radio").color(rw::WHITE));
+            ui.label(
+                egui::RichText::new("No Radio")
+                    .small()
+                    .color(theme::palette::TEXT_DIM),
+            );
         });
-        ui.label(egui::RichText::new("---").monospace().color(rw::RX_GREEN));
+        theme::readout(ui, egui::RichText::new("---").color(theme::palette::GRAY));
         return;
     }
     let (rx, secondary, sent_by) = rw::receiving(rs, i);
@@ -176,7 +187,11 @@ fn radio_group(
         ui.label(egui::RichText::new(&radio.name).small().color(rw::WHITE));
         let tuned = rw::tuned_count(ctx, rs, &radio);
         if tuned > 0 {
-            ui.label(egui::RichText::new(format!("👤{tuned}")).small().color(rw::WHITE));
+            ui.label(
+                egui::RichText::new(format!("👤{tuned}"))
+                    .small()
+                    .color(theme::palette::TEXT_DIM),
+            );
         }
     });
     let text = if rx && !sent_by.is_empty() {
@@ -220,7 +235,15 @@ fn intercom_group(ui: &mut egui::Ui, rs: &mut RadioState) {
         if rw::indicator(ui, color, 12.0) && is_intercom {
             rw::select(rs, 0);
         }
-        ui.label(egui::RichText::new(if is_intercom { "Intercom" } else { "No Intercom" }).color(rw::WHITE));
+        ui.label(
+            egui::RichText::new(if is_intercom { "Intercom" } else { "No Intercom" })
+                .small()
+                .color(if is_intercom {
+                    rw::WHITE
+                } else {
+                    theme::palette::TEXT_DIM
+                }),
+        );
         if is_intercom {
             rw::volume_slider(ui, rs, 0, true);
         }

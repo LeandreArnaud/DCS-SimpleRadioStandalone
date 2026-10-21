@@ -4,6 +4,18 @@
 use eframe::egui;
 use srs_settings::{GlobalSettings, GlobalSettingsKey as G, ProfileSettings, ProfileSettingsKey as P};
 
+use super::theme;
+
+/// Collapsible section drawn as a card.
+fn section(ui: &mut egui::Ui, title: &str, add_contents: impl FnOnce(&mut egui::Ui)) {
+    theme::card(ui, None, |ui| {
+        egui::CollapsingHeader::new(egui::RichText::new(title).family(theme::bold()))
+            .id_salt(title)
+            .show(ui, add_contents);
+    });
+    ui.add_space(6.0);
+}
+
 /// What the caller must refresh after the tab ran.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct SettingsChange {
@@ -137,7 +149,7 @@ pub fn settings_tab(
 ) -> SettingsChange {
     let mut c = SettingsChange::default();
     egui::ScrollArea::vertical().show(ui, |ui| {
-        ui.collapsing("General (global)", |ui| {
+        section(ui, "General (global)", |ui| {
             c.changed |= toggle_g(
                 ui,
                 s,
@@ -219,10 +231,9 @@ pub fn settings_tab(
                 "Not implemented in the Rust client",
             );
             c.changed |= toggle_g(ui, s, G::StartMinimised, "Start minimised", "");
-            c.changed |= toggle_g(ui, s, G::DarkMode, "Dark mode", "");
             c.changed |= int_g(ui, s, G::IdleTimeOut, "Idle timeout (s)", 60..=3600);
         });
-        ui.collapsing("Microphone (global)", |ui| {
+        section(ui, "Microphone (global)", |ui| {
             let mut mic = false;
             mic |= toggle_g(
                 ui,
@@ -245,7 +256,7 @@ pub fn settings_tab(
             mic |= float_g(ui, s, G::MicBoost, "Mic boost", 0.0..=1.0);
             c.changed |= mic;
         });
-        ui.collapsing("Incoming audio (global)", |ui| {
+        section(ui, "Incoming audio (global)", |ui| {
             c.changed |= toggle_g(ui, s, G::IncomingAudioAGC, "Automatic gain control", "");
             c.changed |= int_g(ui, s, G::IncomingAudioAGCTarget, "AGC target", 1000..=32000);
             c.changed |= int_g(ui, s, G::IncomingAudioAGCDecrement, "AGC decrement", -100..=0);
@@ -259,7 +270,7 @@ pub fn settings_tab(
                 -60..=0,
             );
         });
-        ui.collapsing("Cockpit integration (profile)", |ui| {
+        section(ui, "Cockpit integration (profile)", |ui| {
             c.changed |= toggle_p(ui, p, P::RadioSwitchIsPTT, "Radio switch works as PTT", "");
             c.changed |= toggle_p(
                 ui,
@@ -332,7 +343,7 @@ pub fn settings_tab(
                 c.changed = true;
             }
         });
-        ui.collapsing("Radio effects (profile)", |ui| {
+        section(ui, "Radio effects (profile)", |ui| {
             c.changed |= toggle_p(ui, p, P::RadioRxEffects_Start, "RX start effect", "");
             c.changed |= toggle_p(ui, p, P::RadioRxEffects_End, "RX end effect", "");
             c.changed |= toggle_p(ui, p, P::RadioTxEffects_Start, "TX start effect", "");
@@ -405,7 +416,7 @@ pub fn settings_tab(
                 "",
             );
         });
-        ui.collapsing("Audio channels (profile)", |ui| {
+        section(ui, "Audio channels (profile)", |ui| {
             c.changed |= channel_p(ui, p, P::IntercomChannel, "Intercom");
             for (i, key) in [
                 P::Radio1Channel,

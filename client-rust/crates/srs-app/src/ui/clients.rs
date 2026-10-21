@@ -4,6 +4,8 @@
 use eframe::egui;
 use srs_client::Client;
 
+use super::theme::{self, palette as pal};
+
 pub fn clients_tab(ui: &mut egui::Ui, net: &Client, my_guid: &str) {
     let mut clients = net.shared.snapshot();
     clients.sort_by(|a, b| {
@@ -12,7 +14,11 @@ pub fn clients_tab(ui: &mut egui::Ui, net: &Client, my_guid: &str) {
             .cmp(&a.client.coalition)
             .then_with(|| a.client.name.to_lowercase().cmp(&b.client.name.to_lowercase()))
     });
-    ui.label(format!("{} clients", clients.len()));
+    ui.label(
+        egui::RichText::new(format!("{} clients", clients.len()))
+            .small()
+            .color(pal::TEXT_DIM),
+    );
     egui::ScrollArea::vertical().show(ui, |ui| {
         egui::Grid::new("clients")
             .striped(true)
@@ -34,12 +40,11 @@ pub fn clients_tab(ui: &mut egui::Ui, net: &Client, my_guid: &str) {
                     });
                     ui.label(if c.client.allow_record { "R" } else { "-" });
                     let color = match c.client.coalition {
-                        1 => egui::Color32::from_rgb(220, 50, 50),
-                        2 => egui::Color32::from_rgb(60, 120, 255),
-                        _ => egui::Color32::WHITE,
+                        1 => pal::COALITION_RED,
+                        2 => pal::COALITION_BLUE,
+                        _ => pal::GRAY,
                     };
-                    let (rect, _) = ui.allocate_exact_size(egui::vec2(12.0, 12.0), egui::Sense::hover());
-                    ui.painter().circle_filled(rect.center(), 5.0, color);
+                    theme::led(ui, color, 12.0);
                     ui.label(
                         c.client
                             .radio_info
