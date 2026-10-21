@@ -200,7 +200,40 @@ impl Drop for DcsIo {
     }
 }
 
-/// Spawn every DCS task on the given runtime.
+/// The auto-connect listener (5069) runs for the whole life of the client,
+/// not only while connected (`DCSAutoConnectHandler` is started by
+/// `ClientStateSingleton`). Dropping the handle stops it.
+pub struct AutoConnectListener {
+    stop_tx: watch::Sender<bool>,
+    pub port: u16,
+}
+
+impl Drop for AutoConnectListener {
+    fn drop(&mut self) {
+        let _ = self.stop_tx.send(true);
+    }
+}
+
+/// Listen for `host[:port]` lines from the DCS GameGUI script.
+pub fn spawn_autoconnect(
+    rt: &tokio::runtime::Handle,
+    port: u16,
+    events: mpsc::Sender<DcsEvent>,
+    wake: Arc<dyn Fn() + Send + Sync>,
+) -> AutoConnectListener {
+    let (stop_tx, stop_rx) = watch::channel(false);
+    rt.spawn(listen(
+        port,
+        "DCS AutoConnect",
+        stop_rx,
+        |text| Some(DcsEvent::AutoConnect(parse_autoconnect(text))),
+        events,
+        wake,
+    ));
+    AutoConnectListener { stop_tx, port }
+}
+
+/// Spawn every DCS task (except auto-connect) on the given runtime.
 pub fn spawn(
     rt: &tokio::runtime::Handle,
     ports: DcsPorts,
@@ -256,17 +289,6 @@ pub fn spawn(
                     .ok()
                     .map(DcsEvent::LosResults)
             },
-            ev,
-            wake,
-        ));
-    }
-    {
-        let (port, name, stop, ev, wake) = mk(ports.autoconnect_in, "DCS AutoConnect");
-        rt.spawn(listen(
-            port,
-            name,
-            stop,
-            |text| Some(DcsEvent::AutoConnect(parse_autoconnect(text))),
             ev,
             wake,
         ));

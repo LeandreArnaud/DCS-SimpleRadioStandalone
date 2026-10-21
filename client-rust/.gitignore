@@ -2,3 +2,7 @@
 /dist
 **/*.rs.bk
 *.pdb
+# Files written next to the exe when running from here
+clientlog.txt
+clientlog.old.txt
+FavouriteServers.csv

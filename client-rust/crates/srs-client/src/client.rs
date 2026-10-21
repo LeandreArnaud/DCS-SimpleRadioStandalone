@@ -78,6 +78,7 @@ pub struct Client {
     pub ptt: Arc<crate::ptt::PttHandler>,
     input_poller: Option<srs_input::PollerHandle>,
     dcs_io: Option<Arc<DcsIo>>,
+    autoconnect: Option<dcs_io::AutoConnectListener>,
     dcs_thread: Option<std::thread::JoinHandle<()>>,
     handle: Option<TcpHandle>,
     input: Option<InputStream>,
@@ -137,6 +138,7 @@ impl Client {
             ptt,
             input_poller: None,
             dcs_io: None,
+            autoconnect: None,
             dcs_thread: None,
             handle: None,
             input: None,
@@ -376,6 +378,34 @@ impl Client {
 
     /// `DCSRadioSyncManager.Start`: listeners + sync thread. Called once the
     /// TCP session is up.
+    /// Start (or move to the configured port) the always-on auto-connect
+    /// listener. Call after `dcs_ports` is set; no-op when already bound.
+    pub fn start_autoconnect(&mut self) {
+        let port = self.dcs_ports.autoconnect_in;
+        if self.autoconnect.as_ref().is_some_and(|a| a.port == port) {
+            return;
+        }
+        self.autoconnect = None;
+        let (tx, rx) = mpsc::channel::<dcs_io::DcsEvent>();
+        let listener = dcs_io::spawn_autoconnect(self.rt.handle(), port, tx, self.wake.clone());
+        let events_tx = self.events_tx.clone();
+        let wake = self.wake.clone();
+        std::thread::Builder::new()
+            .name("srs-autoconnect".into())
+            .spawn(move || {
+                while let Ok(evt) = rx.recv() {
+                    if let dcs_io::DcsEvent::AutoConnect(addr) = evt {
+                        if events_tx.send(AppEvent::AutoConnect(addr)).is_err() {
+                            break;
+                        }
+                        wake();
+                    }
+                }
+            })
+            .expect("autoconnect thread");
+        self.autoconnect = Some(listener);
+    }
+
     pub fn start_dcs(&mut self) {
         self.stop_dcs();
         let (ev_tx, ev_rx) = mpsc::channel();

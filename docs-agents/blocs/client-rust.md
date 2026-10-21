@@ -100,6 +100,10 @@ RequireAdmin, passthrough micro, aperçu audio, localisation.
 - Presets `.txt` : le nom de fichier normalisé (alphanumérique minuscule) doit être un *préfixe* du nom de la
   radio normalisé (`AN_ARC-210.txt` pour « AN/ARC-210(V) »). Une transmission sur un `secFreq` (guard) n'est
   jamais relayée. Les commandes UDP transpondeur forcent un RADIO_UPDATE même sans transpondeur en overlay.
+- Auto-connexion DCS (5069) : écoutée dès le démarrage par `Client::start_autoconnect` (indépendante de la
+  connexion, comme `DCSAutoConnectHandler` lancé par `ClientStateSingleton`) ; les autres listeners DCS ne
+  démarrent qu'après la connexion. Bug trouvé au premier test Windows (2026-10-21) : le listener ne démarrait
+  qu'une fois connecté, donc jamais utile.
 - UI (C# reproduit) : `AutoConnect` et `AutoConnectPrompt` ne sont lus nulle part (auto-connexion toujours active,
   seule l'invite « mismatch » existe) ; un échec de connexion joue aussi le bip de déconnexion ; les identifiants
   de périphériques stockés sont les ID WASAPI (`{0.0.0.00000000}.{guid}`, `"default"`), lus via `cpal::DeviceId` ;

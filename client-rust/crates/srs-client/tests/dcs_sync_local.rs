@@ -52,6 +52,8 @@ fn export_gamegui_and_commands_flow_through() {
     let (app_tx, app_rx) = mpsc::channel::<AppEvent>();
     let (net_tx, net_rx) = mpsc::channel::<NetCommand>();
     let wake: Arc<dyn Fn() + Send + Sync> = Arc::new(|| {});
+    let autoconnect =
+        dcs_io::spawn_autoconnect(rt.handle(), ports.autoconnect_in, dcs_tx.clone(), wake.clone());
     let io = Arc::new(dcs_io::spawn(
         rt.handle(),
         ports,
@@ -165,6 +167,7 @@ fn export_gamegui_and_commands_flow_through() {
 
     io.stop();
     drop(io);
+    drop(autoconnect);
     let deadline = Instant::now() + Duration::from_secs(5);
     while !sync.is_finished() && Instant::now() < deadline {
         std::thread::sleep(Duration::from_millis(50));

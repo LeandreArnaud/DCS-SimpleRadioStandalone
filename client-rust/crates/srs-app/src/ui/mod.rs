@@ -115,6 +115,8 @@ impl App {
             ProfileSettings::in_memory("default")
         });
         apply_settings_to_client(&mut net, &mut settings, &mut profile);
+        // DCS auto-connect (5069) must listen before any connection exists.
+        net.start_autoconnect();
         let speaker_boost = settings.get_f64(GlobalSettingsKey::SpeakerBoost) as f32;
         net.prefs.show_transmitter_name.store(
             settings.get_bool(GlobalSettingsKey::ShowTransmitterName),
@@ -230,6 +232,7 @@ impl App {
     /// the Settings tab or a profile switch).
     fn apply_all_settings(&mut self) {
         apply_settings_to_client(&mut self.net, &mut self.settings, &mut self.profile);
+        self.net.start_autoconnect();
         let mic = self.net.mic_settings.clone();
         self.net.set_mic_settings(mic);
         self.push_ptt_settings();
