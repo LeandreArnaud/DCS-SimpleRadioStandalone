@@ -2,6 +2,9 @@ name: Client (Rust)
 
 on:
   push:
+    # Without `branches`, defining `tags` alone stops branch pushes from triggering.
+    branches:
+      - "**"
     paths:
       - "client-rust/**"
       - ".github/workflows/client-rust.yml"
